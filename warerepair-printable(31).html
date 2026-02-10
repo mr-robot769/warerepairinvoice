@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WareRepair Invoice</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <style>
+        /* Force dropdown options to be visible */
+        select option {
+            background-color: white !important;
+            color: black !important;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            /* Larger touch targets */
+            input, select, button {
+                min-height: 44px;
+            }
+            
+            /* Better spacing */
+            .space-y-4 > * + * {
+                margin-top: 1.5rem;
+            }
+            
+            /* Larger text for readability */
+            body {
+                font-size: 16px;
+            }
+            
+            /* Make dropdowns easier to scroll */
+            .overflow-y-auto {
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            /* Prevent zoom on input focus */
+            input[type="text"],
+            input[type="number"],
+            input[type="tel"],
+            input[type="email"],
+            select {
+                font-size: 16px;
+            }
+        }
+        
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printable-area, #printable-area * {
+                visibility: visible;
+            }
+            #printable-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white !important;
+                padding: 40px;
+                color: black !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .gradient-bg {
+                background: white !important;
+                border: none !important;
+                box-shadow: none !important;
+                backdrop-filter: none !important;
+            }
+            .text-white, .text-orange-300, .text-white\/80 {
+                color: black !important;
+            }
+            .bg-white\/5, .bg-white\/10 {
+                background: white !important;
+                border: 1px solid #ddd !important;
+            }
+            .bg-gradient-to-r, .bg-gradient-to-br {
+                background: white !important;
+                border: 2px solid black !important;
+            }
+            /* Invoice Header */
+            .print-header {
+                border-bottom: 3px solid black;
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+            }
+            .print-company {
+                font-size: 28px;
+                font-weight: bold;
+                color: black !important;
+            }
+            .print-doc-type {
+                font-size: 24px;
+                font-weight: bold;
+                color: black !important;
+                text-align: right;
+            }
+            /* Customer Info Table */
+            .print-customer-info {
+                border: 1px solid #333;
+                margin-bottom: 20px;
+            }
+            .print-customer-info td {
+                padding: 8px;
+                border-bottom: 1px solid #ddd;
+            }
+            .print-customer-info td:first-child {
+                font-weight: bold;
+                width: 150px;
+                background: #f5f5f5;
+            }
+            /* Line Items Table */
+            .print-line-items {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 20px 0;
+            }
+            .print-line-items th {
+                background: #333;
+                color: white !important;
+                padding: 10px;
+                text-align: left;
+                font-weight: bold;
+                border: 1px solid #333;
+            }
+            .print-line-items td {
+                padding: 8px;
+                border: 1px solid #ddd;
+            }
+            .print-line-items .subtotal-row td {
+                font-weight: bold;
+                background: #f5f5f5;
+            }
+            /* Total Box */
+            .print-total {
+                float: right;
+                width: 300px;
+                border: 2px solid black;
+                padding: 15px;
+                margin-top: 20px;
+            }
+            .print-total-label {
+                font-size: 18px;
+                font-weight: bold;
+            }
+            .print-total-amount {
+                font-size: 32px;
+                font-weight: bold;
+                text-align: right;
+            }
+            /* Footer */
+            .print-footer {
+                margin-top: 60px;
+                padding-top: 20px;
+                border-top: 1px solid #ddd;
+                font-size: 12px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDRi237g09sWeXu2cUhEuXdYJq8WCvwR-w",
+            authDomain: "warerepair.firebaseapp.com",
+            projectId: "warerepair",
+            storageBucket: "warerepair.firebasestorage.app",
+            messagingSenderId: "152323084041",
+            appId: "1:152323084041:web:16b650dbce406bbe570dd8"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        const { useState, useEffect } = React;
+        
+        // Common truck repair jobs directory
+        const COMMON_JOBS = [
+            "Oil Change",
+            "Brake Repair",
+            "Brake Inspection",
+            "Tire Rotation",
+            "Tire Replacement",
+            "Wheel Alignment",
+            "Battery Replacement",
+            "Alternator Replacement",
+            "Starter Replacement",
+            "Transmission Service",
+            "Transmission Repair",
+            "Clutch Replacement",
+            "Engine Tune-Up",
+            "Spark Plug Replacement",
+            "Air Filter Replacement",
+            "Fuel Filter Replacement",
+            "Coolant Flush",
+            "Radiator Repair",
+            "Water Pump Replacement",
+            "Thermostat Replacement",
+            "Timing Belt Replacement",
+            "Serpentine Belt Replacement",
+            "Suspension Repair",
+            "Shock Absorber Replacement",
+            "Strut Replacement",
+            "Ball Joint Replacement",
+            "Tie Rod Replacement",
+            "Control Arm Replacement",
+            "Wheel Bearing Replacement",
+            "CV Axle Replacement",
+            "U-Joint Replacement",
+            "Driveshaft Repair",
+            "Differential Service",
+            "Exhaust Repair",
+            "Muffler Replacement",
+            "Catalytic Converter Replacement",
+            "O2 Sensor Replacement",
+            "Engine Diagnostics",
+            "Check Engine Light Diagnosis",
+            "Electrical Diagnostics",
+            "A/C Repair",
+            "A/C Recharge",
+            "Heater Core Replacement",
+            "Blower Motor Replacement",
+            "Power Steering Repair",
+            "Steering Rack Replacement",
+            "Fuel Pump Replacement",
+            "Fuel Injector Cleaning",
+            "Fuel Injector Replacement",
+            "Turbocharger Repair",
+            "DPF Filter Cleaning",
+            "DPF Filter Replacement",
+            "EGR Valve Replacement",
+            "Head Gasket Replacement",
+            "Valve Cover Gasket Replacement",
+            "Oil Pan Gasket Replacement",
+            "Rear Main Seal Replacement",
+            "Window Regulator Replacement",
+            "Door Lock Actuator Replacement",
+            "Headlight Replacement",
+            "Taillight Replacement",
+            "Wiper Blade Replacement",
+            "Mirror Replacement",
+            "Body Work",
+            "Paint Repair",
+            "Rust Repair",
+            "Pre-Purchase Inspection",
+            "Safety Inspection",
+            "Emissions Testing",
+            "Diesel Engine Repair",
+            "Diesel Fuel System Service",
+            "Glow Plug Replacement",
+            "Injector Replacement",
+            "Turbo Replacement",
+            "Trailer Hitch Installation",
+            "Undercarriage Inspection",
+            "Fluid Top-Off",
+            "Multi-Point Inspection"
+        ].sort();
+        
+        // Common truck parts directory
+        const COMMON_PARTS = [
+            // Brakes
+            "Brake Pads - Front",
+            "Brake Pads - Rear",
+            "Brake Rotors - Front",
+            "Brake Rotors - Rear",
+            "Brake Caliper",
+            "Brake Line",
+            "Brake Master Cylinder",
+            "Brake Booster",
+            "Brake Fluid",
+            "Wheel Cylinder",
+            // Engine
+            "Oil Filter",
+            "Air Filter",
+            "Fuel Filter",
+            "Spark Plugs",
+            "Glow Plugs",
+            "Serpentine Belt",
+            "Timing Belt",
+            "Water Pump",
+            "Thermostat",
+            "Radiator",
+            "Radiator Hose - Upper",
+            "Radiator Hose - Lower",
+            "Heater Hose",
+            "Coolant",
+            "Alternator",
+            "Starter",
+            "Battery",
+            "Battery Cables",
+            "Ignition Coil",
+            "Fuel Pump",
+            "Fuel Injector",
+            "Turbocharger",
+            "EGR Valve",
+            "DPF Filter",
+            "DEF Fluid",
+            "Engine Oil",
+            // Transmission
+            "Transmission Filter",
+            "Transmission Fluid",
+            "Clutch Kit",
+            "Pressure Plate",
+            "Flywheel",
+            "Driveshaft U-Joint",
+            "CV Axle",
+            "Differential Fluid",
+            // Suspension
+            "Shock Absorber - Front",
+            "Shock Absorber - Rear",
+            "Strut Assembly",
+            "Coil Spring",
+            "Leaf Spring",
+            "Control Arm",
+            "Ball Joint - Upper",
+            "Ball Joint - Lower",
+            "Tie Rod End - Inner",
+            "Tie Rod End - Outer",
+            "Sway Bar Link",
+            "Sway Bar Bushing",
+            "Wheel Bearing",
+            "Hub Assembly",
+            // Steering
+            "Power Steering Pump",
+            "Power Steering Hose",
+            "Steering Rack",
+            "Steering Gearbox",
+            "Pitman Arm",
+            "Idler Arm",
+            "Power Steering Fluid",
+            // Exhaust
+            "Muffler",
+            "Catalytic Converter",
+            "Exhaust Pipe",
+            "Exhaust Manifold",
+            "O2 Sensor",
+            "Exhaust Gasket",
+            "Exhaust Clamp",
+            // Electrical
+            "Headlight Bulb",
+            "Taillight Bulb",
+            "Turn Signal Bulb",
+            "Fuse",
+            "Relay",
+            "Wiring Harness",
+            "Sensor - Various",
+            // HVAC
+            "A/C Compressor",
+            "A/C Condenser",
+            "Heater Core",
+            "Blower Motor",
+            "Cabin Air Filter",
+            "A/C Refrigerant",
+            // Tires & Wheels
+            "Tire - Front",
+            "Tire - Rear",
+            "Wheel Stud",
+            "Lug Nut",
+            "TPMS Sensor",
+            "Valve Stem",
+            // Body & Misc
+            "Wiper Blade",
+            "Mirror - Side",
+            "Door Handle",
+            "Window Regulator",
+            "Door Lock Actuator",
+            "Headlight Assembly",
+            "Taillight Assembly",
+            "Grille",
+            "Bumper",
+            "Fender",
+            "Hood"
+        ].sort();
+        
+        const FileText = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+        );
+
+        const Plus = ({ size = 20 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+        );
+
+        const Trash = ({ size = 20 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+        );
+
+        const Printer = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 6 2 18 2 18 9"/>
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                <rect x="6" y="14" width="12" height="8"/>
+            </svg>
+        );
+
+        const ChevronDown = ({ size = 20 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+            </svg>
+        );
+
+        const ChevronRight = ({ size = 20 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+            </svg>
+        );
+
+        function WareRepairInvoice() {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [isSignup, setIsSignup] = useState(false);
+            const [authError, setAuthError] = useState('');
+            
+            const [docType, setDocType] = useState('estimate');
+            const [activeTab, setActiveTab] = useState('create'); // 'create' or 'history'
+            const [savedInvoices, setSavedInvoices] = useState([]);
+            const [currentInvoiceId, setCurrentInvoiceId] = useState(null);
+            const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState(null);
+            const [laborRate, setLaborRate] = useState(150);
+            const [customerName, setCustomerName] = useState('');
+            const [customerPhone, setCustomerPhone] = useState('');
+            const [vehicleInfo, setVehicleInfo] = useState('');
+            const [paymentReceived, setPaymentReceived] = useState(false);
+            const [paymentMethod, setPaymentMethod] = useState('Cash');
+            const [partialPayment, setPartialPayment] = useState(0);
+            const [showDropdowns, setShowDropdowns] = useState({});
+            const [showJobDropdowns, setShowJobDropdowns] = useState({});
+            const [collapsedJobs, setCollapsedJobs] = useState({});
+            const [dateFilter, setDateFilter] = useState('all'); // 'all', 'year', 'month', 'week'
+            const [jobs, setJobs] = useState([{
+                id: 1,
+                name: '',
+                hours: 0,
+                partsMarkup: 30,
+                parts: [{ description: '', cost: 0 }]
+            }]);
+
+            // Load saved invoices on mount
+            useEffect(() => {
+                // Check authentication state
+                const unsubscribe = auth.onAuthStateChanged((user) => {
+                    setUser(user);
+                    setLoading(false);
+                    
+                    if (user) {
+                        // Load invoices from Firestore
+                        loadInvoicesFromFirestore(user.uid);
+                    }
+                });
+                
+                return () => unsubscribe();
+            }, []);
+
+            // Calculate next invoice number - always highest + 1 (no gaps due to renumbering)
+            const getNextInvoiceNumber = () => {
+                if (savedInvoices.length === 0) return 1000;
+                const highestNumber = Math.max(...savedInvoices.map(inv => inv.number));
+                return highestNumber + 1;
+            };
+
+            const invoiceNumber = currentInvoiceNumber !== null ? currentInvoiceNumber : getNextInvoiceNumber();
+
+            // Firestore functions
+            const loadInvoicesFromFirestore = async (userId) => {
+                try {
+                    const snapshot = await db.collection(`users/${userId}/invoices`).get();
+                    const invoices = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                    setSavedInvoices(invoices);
+                } catch (error) {
+                    console.error('Error loading invoices:', error);
+                }
+            };
+
+            const saveInvoiceToFirestore = async (userId, invoiceData) => {
+                try {
+                    if (invoiceData.id) {
+                        // Update existing
+                        await db.collection(`users/${userId}/invoices`).doc(invoiceData.id).set(invoiceData);
+                    } else {
+                        // Create new
+                        const docRef = await db.collection(`users/${userId}/invoices`).add(invoiceData);
+                        return docRef.id;
+                    }
+                } catch (error) {
+                    console.error('Error saving invoice:', error);
+                    throw error;
+                }
+            };
+
+            const deleteInvoiceFromFirestore = async (userId, invoiceId) => {
+                try {
+                    await db.collection(`users/${userId}/invoices`).doc(invoiceId).delete();
+                } catch (error) {
+                    console.error('Error deleting invoice:', error);
+                }
+            };
+
+            // Authentication functions
+            const handleAuth = async (e) => {
+                e.preventDefault();
+                setAuthError('');
+                
+                try {
+                    if (isSignup) {
+                        await auth.createUserWithEmailAndPassword(email, password);
+                    } else {
+                        await auth.signInWithEmailAndPassword(email, password);
+                    }
+                } catch (error) {
+                    setAuthError(error.message);
+                }
+            };
+
+            const handleSignOut = () => {
+                auth.signOut();
+                setSavedInvoices([]);
+            };
+
+            const saveInvoice = async () => {
+                if (!user) return;
+                
+                const invoiceData = {
+                    number: invoiceNumber,
+                    date: new Date().toISOString(),
+                    type: docType,
+                    customerName,
+                    customerPhone,
+                    vehicleInfo,
+                    laborRate,
+                    jobs,
+                    total: grandTotal,
+                    archived: false,
+                    paymentReceived,
+                    paymentMethod,
+                    partialPayment
+                };
+                
+                try {
+                    if (currentInvoiceId) {
+                        // Update existing
+                        invoiceData.id = currentInvoiceId;
+                        await saveInvoiceToFirestore(user.uid, invoiceData);
+                        setSavedInvoices(savedInvoices.map(inv => 
+                            inv.id === currentInvoiceId ? invoiceData : inv
+                        ));
+                    } else {
+                        // Create new
+                        const newId = await saveInvoiceToFirestore(user.uid, invoiceData);
+                        invoiceData.id = newId;
+                        setSavedInvoices([invoiceData, ...savedInvoices]);
+                    }
+                    
+                    alert(`${docType === 'estimate' ? 'Estimate' : docType === 'work_order' ? 'Work Order' : 'Invoice'} #${invoiceNumber} saved successfully!`);
+                    clearForm();
+                } catch (error) {
+                    alert('Error saving invoice: ' + error.message);
+                }
+            };
+
+            const archiveInvoice = async (id) => {
+                if (!user) return;
+                
+                const invoice = savedInvoices.find(inv => inv.id === id);
+                const updatedInvoice = { ...invoice, archived: !invoice.archived };
+                
+                try {
+                    await saveInvoiceToFirestore(user.uid, updatedInvoice);
+                    setSavedInvoices(savedInvoices.map(inv => 
+                        inv.id === id ? updatedInvoice : inv
+                    ));
+                } catch (error) {
+                    alert('Error archiving invoice: ' + error.message);
+                }
+            };
+
+            const deleteInvoice = async (id) => {
+                if (!user) return;
+                
+                if (confirm('Are you sure you want to permanently delete this invoice?')) {
+                    try {
+                        await deleteInvoiceFromFirestore(user.uid, id);
+                        setSavedInvoices(savedInvoices.filter(inv => inv.id !== id));
+                    } catch (error) {
+                        alert('Error deleting invoice: ' + error.message);
+                    }
+                }
+            };
+
+            const clearForm = () => {
+                setCustomerName('');
+                setCustomerPhone('');
+                setVehicleInfo('');
+                setPaymentReceived(false);
+                setPaymentMethod('Cash');
+                setPartialPayment(0);
+                setCurrentInvoiceId(null);
+                setCurrentInvoiceNumber(null);
+                setJobs([{
+                    id: Date.now(),
+                    name: '',
+                    hours: 0,
+                    partsMarkup: 30,
+                    parts: [{ description: '', cost: 0 }]
+                }]);
+            };
+
+            const loadInvoice = (invoice) => {
+                setCurrentInvoiceId(invoice.id);
+                setCurrentInvoiceNumber(invoice.number);
+                setDocType(invoice.type);
+                setCustomerName(invoice.customerName);
+                setCustomerPhone(invoice.customerPhone);
+                setVehicleInfo(invoice.vehicleInfo);
+                setLaborRate(invoice.laborRate);
+                setJobs(invoice.jobs);
+                setPaymentReceived(invoice.paymentReceived || false);
+                setPaymentMethod(invoice.paymentMethod || 'Cash');
+                setPartialPayment(invoice.partialPayment || 0);
+                setActiveTab('create');
+            };
+
+            const addJob = () => {
+                setJobs([...jobs, {
+                    id: Date.now(),
+                    name: '',
+                    hours: 0,
+                    partsMarkup: 30,
+                    parts: [{ description: '', cost: 0 }]
+                }]);
+            };
+
+            const removeJob = (id) => {
+                if (jobs.length > 1) {
+                    setJobs(jobs.filter(job => job.id !== id));
+                }
+            };
+
+            const updateJob = (id, field, value) => {
+                setJobs(jobs.map(job => 
+                    job.id === id ? { ...job, [field]: value } : job
+                ));
+            };
+
+            const addPart = (jobId) => {
+                setJobs(jobs.map(job => 
+                    job.id === jobId 
+                        ? { ...job, parts: [...job.parts, { description: '', cost: 0 }] }
+                        : job
+                ));
+            };
+
+            const updatePart = (jobId, partIndex, field, value) => {
+                setJobs(jobs.map(job => 
+                    job.id === jobId 
+                        ? {
+                            ...job,
+                            parts: job.parts.map((part, idx) => 
+                                idx === partIndex ? { ...part, [field]: value } : part
+                            )
+                        }
+                        : job
+                ));
+            };
+
+            const handlePaymentReceived = (checked) => {
+                setPaymentReceived(checked);
+                // Auto-convert to invoice when payment received (from any type)
+                if (checked) {
+                    setDocType('invoice');
+                }
+            };
+
+            const toggleJobCollapse = (jobId) => {
+                setCollapsedJobs(prev => ({
+                    ...prev,
+                    [jobId]: !prev[jobId]
+                }));
+            };
+
+            const getFilteredInvoicesByDate = () => {
+                if (dateFilter === 'all') return savedInvoices;
+                
+                const now = new Date();
+                const startOfWeek = new Date(now);
+                startOfWeek.setDate(now.getDate() - now.getDay());
+                startOfWeek.setHours(0, 0, 0, 0);
+                
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                const startOfYear = new Date(now.getFullYear(), 0, 1);
+                
+                return savedInvoices.filter(inv => {
+                    const invDate = new Date(inv.date);
+                    if (dateFilter === 'week') return invDate >= startOfWeek;
+                    if (dateFilter === 'month') return invDate >= startOfMonth;
+                    if (dateFilter === 'year') return invDate >= startOfYear;
+                    return true;
+                });
+            };
+
+            const calculateTotals = () => {
+                const filtered = getFilteredInvoicesByDate();
+                
+                const estimateTotal = filtered
+                    .filter(inv => inv.type === 'estimate' && !inv.archived)
+                    .reduce((sum, inv) => sum + inv.total, 0);
+                
+                const workOrderTotal = filtered
+                    .filter(inv => inv.type === 'work_order' && !inv.archived)
+                    .reduce((sum, inv) => sum + inv.total, 0);
+                
+                const paidInvoiceTotal = filtered
+                    .filter(inv => inv.paymentReceived && !inv.archived)
+                    .reduce((sum, inv) => sum + inv.total, 0);
+                
+                return { estimateTotal, workOrderTotal, paidInvoiceTotal };
+            };
+
+            const getDropdownKey = (jobId, partIndex) => `${jobId}-${partIndex}`;
+
+            const isDropdownOpen = (jobId, partIndex) => {
+                const key = getDropdownKey(jobId, partIndex);
+                return showDropdowns[key] || false;
+            };
+
+            const removePart = (jobId, partIndex) => {
+                setJobs(jobs.map(job => 
+                    job.id === jobId && job.parts.length > 1
+                        ? { ...job, parts: job.parts.filter((_, idx) => idx !== partIndex) }
+                        : job
+                ));
+            };
+
+            const calculateJobTotal = (job) => {
+                const laborTotal = job.hours * laborRate;
+                const partsCost = job.parts.reduce((sum, part) => sum + (parseFloat(part.cost) || 0), 0);
+                const partsTotal = partsCost * (1 + job.partsMarkup / 100);
+                return laborTotal + partsTotal;
+            };
+
+            const grandTotal = jobs.reduce((sum, job) => sum + calculateJobTotal(job), 0);
+
+            const handlePrint = () => {
+                window.print();
+            };
+
+            const today = new Date().toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+
+            // Show loading state
+            if (loading) {
+                return React.createElement('div', { className: "min-h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-slate-800 flex items-center justify-center" },
+                    React.createElement('div', { className: "text-white text-2xl" }, "Loading...")
+                );
+            }
+
+            // Show login/signup if not authenticated
+            if (!user) {
+                return React.createElement('div', { className: "min-h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-slate-800 flex items-center justify-center p-6" },
+                    React.createElement('div', { className: "bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-8 border border-white/20 max-w-md w-full" },
+                        React.createElement('h1', { className: "text-3xl font-bold text-white text-center mb-8" }, "WARE REPAIR"),
+                        React.createElement('h2', { className: "text-xl text-orange-300 text-center mb-6" }, 
+                            isSignup ? "Create Account" : "Sign In"
+                        ),
+                        
+                        authError && React.createElement('div', { className: "bg-red-500/20 border border-red-500 text-red-300 rounded-lg p-3 mb-4 text-sm" },
+                            authError
+                        ),
+                        
+                        React.createElement('form', { onSubmit: handleAuth, className: "space-y-4" },
+                            React.createElement('div', null,
+                                React.createElement('label', { className: "block text-white/80 text-sm mb-2" }, "Email"),
+                                React.createElement('input', {
+                                    type: "email",
+                                    value: email,
+                                    onChange: (e) => setEmail(e.target.value),
+                                    required: true,
+                                    className: "w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white focus:border-orange-400 focus:outline-none"
+                                })
+                            ),
+                            React.createElement('div', null,
+                                React.createElement('label', { className: "block text-white/80 text-sm mb-2" }, "Password"),
+                                React.createElement('input', {
+                                    type: "password",
+                                    value: password,
+                                    onChange: (e) => setPassword(e.target.value),
+                                    required: true,
+                                    minLength: 6,
+                                    className: "w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white focus:border-orange-400 focus:outline-none"
+                                })
+                            ),
+                            React.createElement('button', {
+                                type: "submit",
+                                className: "w-full bg-orange-500 text-white font-bold py-3 rounded-lg hover:bg-orange-600 transition-all"
+                            }, isSignup ? "Sign Up" : "Sign In"),
+                            
+                            React.createElement('button', {
+                                type: "button",
+                                onClick: () => {
+                                    setIsSignup(!isSignup);
+                                    setAuthError('');
+                                },
+                                className: "w-full text-orange-300 text-sm hover:text-orange-200 transition-all"
+                            }, isSignup ? "Already have an account? Sign in" : "Need an account? Sign up")
+                        )
+                    )
+                );
+            }
+
+            // Main app (only shown when authenticated)
+            return React.createElement('div', { className: "min-h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-slate-800 p-6" },
+                React.createElement('div', { className: "max-w-6xl mx-auto" },
+                    
+                    // User info and sign out
+                    React.createElement('div', { className: "flex justify-between items-center mb-4 no-print" },
+                        React.createElement('span', { className: "text-white/60 text-sm" }, `Signed in as: ${user.email}`),
+                        React.createElement('button', {
+                            onClick: handleSignOut,
+                            className: "text-orange-300 hover:text-orange-200 text-sm transition-all"
+                        }, "Sign Out")
+                    ),
+                    
+                    // Tab Navigation
+                    React.createElement('div', { className: "flex gap-2 md:gap-4 mb-6 no-print" },
+                        React.createElement('button', {
+                            onClick: () => setActiveTab('create'),
+                            className: `flex-1 px-4 md:px-6 py-4 rounded-xl font-bold transition-all text-sm md:text-base ${
+                                activeTab === 'create' 
+                                    ? 'bg-orange-500 text-white shadow-lg' 
+                                    : 'bg-white/10 text-white/60 hover:bg-white/20'
+                            }`
+                        }, "Create Invoice"),
+                        React.createElement('button', {
+                            onClick: () => setActiveTab('history'),
+                            className: `flex-1 px-4 md:px-6 py-4 rounded-xl font-bold transition-all text-sm md:text-base ${
+                                activeTab === 'history' 
+                                    ? 'bg-orange-500 text-white shadow-lg' 
+                                    : 'bg-white/10 text-white/60 hover:bg-white/20'
+                            }`
+                        }, `History (${savedInvoices.length})`)
+                    ),
+
+                    // Create Tab Content
+                    activeTab === 'create' && React.createElement('div', { id: "printable-area", className: "gradient-bg bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-8 border border-white/20" },
+                        
+                        // Print-only invoice header
+                        React.createElement('div', { className: "print-header hidden print:block" },
+                            React.createElement('div', { className: "flex justify-between items-start" },
+                                React.createElement('div', null,
+                                    React.createElement('h1', { className: "print-company" }, "WARE REPAIR"),
+                                    React.createElement('p', { style: { color: 'black', fontSize: '14px', marginTop: '10px' } }, "Phone: (616) 897-1500"),
+                                    React.createElement('p', { style: { color: 'black', fontSize: '14px' } }, "Email: info@warerepair.com")
+                                ),
+                                React.createElement('div', { style: { textAlign: 'right' } },
+                                    React.createElement('div', { className: "print-doc-type" }, 
+                                        docType === 'estimate' ? 'ESTIMATE' : docType === 'work_order' ? 'WORK ORDER' : 'INVOICE'
+                                    ),
+                                    React.createElement('p', { style: { color: 'black', fontSize: '18px', fontWeight: 'bold', marginTop: '5px' } }, `#${invoiceNumber}`),
+                                    React.createElement('p', { style: { color: 'black', fontSize: '14px', marginTop: '10px' } }, `Date: ${today}`)
+                                )
+                            )
+                        ),
+
+                        // Screen Header (hide on print)
+                        React.createElement('div', { className: "flex items-center justify-between mb-8 no-print" },
+                            React.createElement('div', { className: "flex items-center gap-3" },
+                                React.createElement('div', { className: "bg-gradient-to-br from-orange-400 to-red-500 p-3 rounded-xl no-print" },
+                                    React.createElement(FileText, { size: 32 })
+                                ),
+                                React.createElement('div', null,
+                                    React.createElement('h1', { className: "text-3xl font-bold text-white" }, "WARE REPAIR"),
+                                    React.createElement('p', { className: "text-orange-300 text-sm" }, "Professional Estimates & Invoices")
+                                )
+                            ),
+                            React.createElement('div', { className: "text-right" },
+                                React.createElement('p', { className: "text-white font-semibold text-lg" }, 
+                                    docType === 'estimate' ? 'ESTIMATE' : docType === 'work_order' ? 'WORK ORDER' : 'INVOICE'
+                                ),
+                                React.createElement('p', { className: "text-orange-300 font-bold text-xl" }, `#${invoiceNumber}`),
+                                React.createElement('p', { className: "text-orange-300 text-sm" }, today)
+                            )
+                        ),
+
+                        React.createElement('div', { className: "space-y-6" },
+                            
+                            // Customer Info Section - Screen version
+                            React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-3 gap-4 pb-4 border-b border-white/20 no-print" },
+                                React.createElement('div', null,
+                                    React.createElement('label', { className: "block text-orange-300 text-sm font-semibold mb-2" }, "Customer Name"),
+                                    React.createElement('input', {
+                                        type: "text",
+                                        value: customerName,
+                                        onChange: (e) => setCustomerName(e.target.value),
+                                        placeholder: "John Doe",
+                                        className: "w-full bg-white/5 border-2 border-orange-500/30 rounded-xl p-3 text-white placeholder-white/40 focus:border-orange-400 focus:outline-none transition-all"
+                                    })
+                                ),
+                                React.createElement('div', null,
+                                    React.createElement('label', { className: "block text-orange-300 text-sm font-semibold mb-2" }, "Phone"),
+                                    React.createElement('input', {
+                                        type: "tel",
+                                        value: customerPhone,
+                                        onChange: (e) => setCustomerPhone(e.target.value),
+                                        placeholder: "(616) 555-1234",
+                                        className: "w-full bg-white/5 border-2 border-orange-500/30 rounded-xl p-3 text-white placeholder-white/40 focus:border-orange-400 focus:outline-none transition-all"
+                                    })
+                                ),
+                                React.createElement('div', null,
+                                    React.createElement('label', { className: "block text-orange-300 text-sm font-semibold mb-2" }, "Vehicle Info"),
+                                    React.createElement('input', {
+                                        type: "text",
+                                        value: vehicleInfo,
+                                        onChange: (e) => setVehicleInfo(e.target.value),
+                                        placeholder: "2018 Ford F-150",
+                                        className: "w-full bg-white/5 border-2 border-orange-500/30 rounded-xl p-3 text-white placeholder-white/40 focus:border-orange-400 focus:outline-none transition-all"
+                                    })
+                                )
+                            ),
+
+                            // Customer Info Section - Print version (table format)
+                            React.createElement('table', { className: "print-customer-info hidden print:table", style: { width: '100%' } },
+                                React.createElement('tbody', null,
+                                    React.createElement('tr', null,
+                                        React.createElement('td', null, "Customer Name:"),
+                                        React.createElement('td', null, customerName || '___________________________')
+                                    ),
+                                    React.createElement('tr', null,
+                                        React.createElement('td', null, "Phone:"),
+                                        React.createElement('td', null, customerPhone || '___________________________')
+                                    ),
+                                    React.createElement('tr', null,
+                                        React.createElement('td', null, "Vehicle:"),
+                                        React.createElement('td', null, vehicleInfo || '___________________________')
+                                    )
+                                )
+                            ),
+
+                            // Line Items - Print version
+                            React.createElement('div', { className: "hidden print:block" },
+                                React.createElement('table', { className: "print-line-items" },
+                                    React.createElement('thead', null,
+                                        React.createElement('tr', null,
+                                            React.createElement('th', { style: { width: '50%' } }, "Description"),
+                                            React.createElement('th', { style: { width: '15%', textAlign: 'right' } }, "Qty/Hours"),
+                                            React.createElement('th', { style: { width: '15%', textAlign: 'right' } }, "Rate"),
+                                            React.createElement('th', { style: { width: '20%', textAlign: 'right' } }, "Amount")
+                                        )
+                                    ),
+                                    React.createElement('tbody', null,
+                                        ...jobs.flatMap((job, jobIndex) => {
+                                            const laborTotal = job.hours * laborRate;
+                                            const partsCost = job.parts.reduce((sum, part) => sum + (parseFloat(part.cost) || 0), 0);
+                                            const partsTotal = partsCost * (1 + job.partsMarkup / 100);
+                                            const jobTotal = calculateJobTotal(job);
+                                            
+                                            const rows = [];
+                                            
+                                            // Job header row
+                                            if (job.name) {
+                                                rows.push(
+                                                    React.createElement('tr', { key: `job-${jobIndex}-header` },
+                                                        React.createElement('td', { colSpan: 4, style: { fontWeight: 'bold', background: '#f9f9f9', paddingTop: '15px' } }, 
+                                                            `Job ${jobIndex + 1}: ${job.name}`
+                                                        )
+                                                    )
+                                                );
+                                            }
+                                            
+                                            // Labor row
+                                            if (job.hours > 0) {
+                                                rows.push(
+                                                    React.createElement('tr', { key: `job-${jobIndex}-labor` },
+                                                        React.createElement('td', null, "Labor"),
+                                                        React.createElement('td', { style: { textAlign: 'right' } }, job.hours.toFixed(2)),
+                                                        React.createElement('td', { style: { textAlign: 'right' } }, `$${laborRate.toFixed(2)}/hr`),
+                                                        React.createElement('td', { style: { textAlign: 'right' } }, `$${laborTotal.toFixed(2)}`)
+                                                    )
+                                                );
+                                            }
+                                            
+                                            // Parts rows
+                                            job.parts.forEach((part, partIndex) => {
+                                                if (part.description && part.cost > 0) {
+                                                    const partTotal = parseFloat(part.cost) * (1 + job.partsMarkup / 100);
+                                                    rows.push(
+                                                        React.createElement('tr', { key: `job-${jobIndex}-part-${partIndex}` },
+                                                            React.createElement('td', null, part.description),
+                                                            React.createElement('td', { style: { textAlign: 'right' } }, "1"),
+                                                            React.createElement('td', { style: { textAlign: 'right' } }, `$${partTotal.toFixed(2)}`),
+                                                            React.createElement('td', { style: { textAlign: 'right' } }, `$${partTotal.toFixed(2)}`)
+                                                        )
+                                                    );
+                                                }
+                                            });
+                                            
+                                            // Job subtotal
+                                            if (jobs.length > 1) {
+                                                rows.push(
+                                                    React.createElement('tr', { key: `job-${jobIndex}-subtotal`, className: "subtotal-row" },
+                                                        React.createElement('td', { colSpan: 3, style: { textAlign: 'right' } }, `Job ${jobIndex + 1} Subtotal:`),
+                                                        React.createElement('td', { style: { textAlign: 'right' } }, `$${jobTotal.toFixed(2)}`)
+                                                    )
+                                                );
+                                            }
+                                            
+                                            return rows;
+                                        })
+                                    )
+                                ),
+                                
+                                // Total box
+                                React.createElement('div', { className: "print-total" },
+                                    React.createElement('div', { className: "print-total-label" }, 
+                                        docType === 'estimate' ? 'ESTIMATED TOTAL:' : 'TOTAL DUE:'
+                                    ),
+                                    React.createElement('div', { className: "print-total-amount" }, `$${grandTotal.toFixed(2)}`)
+                                ),
+                                React.createElement('div', { style: { clear: 'both' } })
+                            ),
+
+                            // Settings (hide on print)
+                            React.createElement('div', { className: "grid grid-cols-2 gap-4 no-print" },
+                                React.createElement('div', null,
+                                    React.createElement('label', { className: "block text-orange-300 text-sm font-semibold mb-2" }, "Document Type"),
+                                    React.createElement('select', {
+                                        value: docType,
+                                        onChange: (e) => setDocType(e.target.value),
+                                        className: "w-full bg-white/5 border-2 border-orange-500/30 rounded-xl p-4 text-white focus:border-orange-400 focus:outline-none transition-all",
+                                        style: { color: 'white' }
+                                    },
+                                        React.createElement('option', { value: 'estimate', style: { color: 'black', background: 'white' } }, "Estimate"),
+                                        React.createElement('option', { value: 'work_order', style: { color: 'black', background: 'white' } }, "Work Order"),
+                                        React.createElement('option', { value: 'invoice', style: { color: 'black', background: 'white' } }, "Invoice")
+                                    )
+                                ),
+                                React.createElement('div', null,
+                                    React.createElement('label', { className: "block text-orange-300 text-sm font-semibold mb-2" }, "Labor Rate ($/hr)"),
+                                    React.createElement('input', {
+                                        type: "number",
+                                        value: laborRate || '',
+                                        onChange: (e) => setLaborRate(e.target.value === '' ? 0 : parseFloat(e.target.value)),
+                                        placeholder: "150",
+                                        className: "w-full bg-white/5 border-2 border-orange-500/30 rounded-xl p-4 text-white focus:border-orange-400 focus:outline-none transition-all"
+                                    })
+                                )
+                            ),
+
+                            // Jobs
+                            ...jobs.map((job, jobIndex) => 
+                                React.createElement('div', { 
+                                    key: job.id,
+                                    className: "bg-white/5 rounded-2xl p-6 border-2 border-blue-500/30 space-y-4"
+                                },
+                                    React.createElement('div', { className: "flex items-center justify-between" },
+                                        React.createElement('div', { className: "flex items-center gap-3" },
+                                            React.createElement('button', {
+                                                onClick: () => toggleJobCollapse(job.id),
+                                                className: "text-orange-300 hover:text-orange-200 transition-all p-2 -m-2"
+                                            },
+                                                collapsedJobs[job.id] 
+                                                    ? React.createElement(ChevronRight, { size: 24 })
+                                                    : React.createElement(ChevronDown, { size: 24 })
+                                            ),
+                                            React.createElement('h3', { className: "text-orange-300 font-bold text-lg" }, `Job ${jobIndex + 1}`),
+                                            job.name && React.createElement('span', { className: "text-white/60 text-sm" }, `- ${job.name}`)
+                                        ),
+                                        React.createElement('div', { className: "flex items-center gap-4" },
+                                            React.createElement('div', { className: "no-print flex items-center gap-2" },
+                                                React.createElement('label', { className: "text-white/80 text-sm whitespace-nowrap" }, "Markup %:"),
+                                                React.createElement('input', {
+                                                    type: "number",
+                                                    value: job.partsMarkup || '',
+                                                    onChange: (e) => updateJob(job.id, 'partsMarkup', e.target.value === '' ? 0 : parseFloat(e.target.value)),
+                                                    placeholder: "30",
+                                                    className: "w-20 bg-white/10 border border-white/20 rounded-lg p-2 text-white text-sm focus:border-orange-400 focus:outline-none transition-all"
+                                                })
+                                            ),
+                                            !collapsedJobs[job.id] && React.createElement('div', { className: "text-white/80 text-sm font-semibold" },
+                                                `$${calculateJobTotal(job).toFixed(2)}`
+                                            ),
+                                            jobs.length > 1 && React.createElement('button', {
+                                                onClick: () => removeJob(job.id),
+                                                className: "bg-red-500/20 text-red-300 p-2 rounded-lg hover:bg-red-500/30 transition-all no-print"
+                                            }, React.createElement(Trash, { size: 16 }))
+                                        )
+                                    ),
+
+                                    // Job content - only show when not collapsed
+                                    !collapsedJobs[job.id] && React.createElement('div', { className: "space-y-4" },
+
+                                    React.createElement('div', { className: "grid grid-cols-1 sm:grid-cols-3 gap-4" },
+                                        React.createElement('div', { className: "sm:col-span-2 relative" },
+                                            React.createElement('label', { className: "block text-white/80 text-sm mb-2" }, "Job Description"),
+                                            React.createElement('input', {
+                                                type: "text",
+                                                value: job.name,
+                                                onChange: (e) => updateJob(job.id, 'name', e.target.value),
+                                                onFocus: () => {
+                                                    setShowJobDropdowns(prev => ({...prev, [job.id]: true}));
+                                                },
+                                                onBlur: () => {
+                                                    setTimeout(() => {
+                                                        setShowJobDropdowns(prev => ({...prev, [job.id]: false}));
+                                                    }, 150);
+                                                },
+                                                placeholder: "Search or type job description",
+                                                className: "w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white placeholder-white/40 focus:border-orange-400 focus:outline-none transition-all"
+                                            }),
+                                            showJobDropdowns[job.id] && React.createElement('div', {
+                                                className: "absolute z-50 w-full mt-1 bg-slate-800 border border-orange-500/50 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+                                            },
+                                                (() => {
+                                                    const searchTerm = job.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                    const filtered = searchTerm 
+                                                        ? COMMON_JOBS.filter(j => {
+                                                            const normalizedJob = j.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                            return normalizedJob.includes(searchTerm);
+                                                        })
+                                                        : COMMON_JOBS;
+                                                    return filtered.length > 0 
+                                                        ? filtered.map((jobName, idx) =>
+                                                            React.createElement('div', {
+                                                                key: idx,
+                                                                onMouseDown: (e) => {
+                                                                    e.preventDefault();
+                                                                    updateJob(job.id, 'name', jobName);
+                                                                },
+                                                                className: "px-3 py-2 text-white text-sm hover:bg-orange-500/30 cursor-pointer border-b border-white/10"
+                                                            }, jobName)
+                                                        )
+                                                        : React.createElement('div', {
+                                                            className: "px-3 py-2 text-white/50 text-sm"
+                                                        }, "No jobs found");
+                                                })()
+                                            )
+                                        ),
+                                        React.createElement('div', null,
+                                            React.createElement('label', { className: "block text-white/80 text-sm mb-2" }, "Labor Hours"),
+                                            React.createElement('input', {
+                                                type: "number",
+                                                step: "0.5",
+                                                value: job.hours || '',
+                                                onChange: (e) => updateJob(job.id, 'hours', e.target.value === '' ? 0 : parseFloat(e.target.value)),
+                                                placeholder: "0",
+                                                className: "w-full bg-white/10 border border-white/20 rounded-lg p-3 text-white focus:border-orange-400 focus:outline-none transition-all"
+                                            })
+                                        )
+                                    ),
+
+                                    // Parts
+                                    React.createElement('div', { className: "space-y-2" },
+                                        React.createElement('h4', { className: "text-white font-semibold" }, "Parts"),
+                                        ...job.parts.map((part, partIndex) =>
+                                            React.createElement('div', { 
+                                                key: partIndex,
+                                                className: "grid grid-cols-1 sm:grid-cols-3 gap-2 items-end"
+                                            },
+                                                React.createElement('div', { className: "sm:col-span-2 relative" },
+                                                    React.createElement('input', {
+                                                        type: "text",
+                                                        value: part.description,
+                                                        onChange: (e) => {
+                                                            updatePart(job.id, partIndex, 'description', e.target.value);
+                                                        },
+                                                        onFocus: () => {
+                                                            const key = getDropdownKey(job.id, partIndex);
+                                                            setShowDropdowns({...showDropdowns, [key]: true});
+                                                        },
+                                                        onBlur: () => {
+                                                            // Delay to allow mousedown on dropdown item to fire first
+                                                            setTimeout(() => {
+                                                                setShowDropdowns(prev => ({...prev, [getDropdownKey(job.id, partIndex)]: false}));
+                                                            }, 150);
+                                                        },
+                                                        placeholder: "Search or type part description",
+                                                        className: "w-full bg-white/10 border border-white/20 rounded-lg p-2 text-white text-sm placeholder-white/40 focus:border-orange-400 focus:outline-none transition-all"
+                                                    }),
+                                                    isDropdownOpen(job.id, partIndex) && React.createElement('div', {
+                                                        className: "absolute z-50 w-full mt-1 bg-slate-800 border border-orange-500/50 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+                                                    },
+                                                        (() => {
+                                                            const searchTerm = part.description.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                            const filtered = searchTerm 
+                                                                ? COMMON_PARTS.filter(p => {
+                                                                    const normalizedPart = p.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                                    return normalizedPart.includes(searchTerm);
+                                                                })
+                                                                : COMMON_PARTS;
+                                                            return filtered.length > 0 
+                                                                ? filtered.map((partName, idx) =>
+                                                                    React.createElement('div', {
+                                                                        key: idx,
+                                                                        onMouseDown: (e) => {
+                                                                            e.preventDefault();
+                                                                            updatePart(job.id, partIndex, 'description', partName);
+                                                                        },
+                                                                        className: "px-3 py-2 text-white text-sm hover:bg-orange-500/30 cursor-pointer border-b border-white/10"
+                                                                    }, partName)
+                                                                )
+                                                                : React.createElement('div', {
+                                                                    className: "px-3 py-2 text-white/50 text-sm"
+                                                                }, "No parts found");
+                                                        })()
+                                                    )
+                                                ),
+                                                React.createElement('div', { className: "flex gap-2" },
+                                                    React.createElement('input', {
+                                                        type: "number",
+                                                        step: "0.01",
+                                                        value: part.cost || '',
+                                                        onChange: (e) => updatePart(job.id, partIndex, 'cost', e.target.value === '' ? 0 : parseFloat(e.target.value)),
+                                                        placeholder: "0.00",
+                                                        className: "flex-1 bg-white/10 border border-white/20 rounded-lg p-2 text-white text-sm placeholder-white/40 focus:border-orange-400 focus:outline-none transition-all"
+                                                    }),
+                                                    job.parts.length > 1 && React.createElement('button', {
+                                                        onClick: () => removePart(job.id, partIndex),
+                                                        className: "bg-red-500/20 text-red-300 px-2 rounded-lg hover:bg-red-500/30 transition-all no-print"
+                                                    }, React.createElement(Trash, { size: 16 }))
+                                                )
+                                            )
+                                        ),
+                                        React.createElement('button', {
+                                            onClick: () => addPart(job.id),
+                                            className: "text-orange-300 text-sm flex items-center gap-2 hover:text-cyan-200 transition-all no-print"
+                                        },
+                                            React.createElement(Plus, { size: 16 }),
+                                            "Add Part"
+                                        )
+                                    ),
+
+                                    // Job Subtotal
+                                    React.createElement('div', { className: "pt-4 border-t border-white/20" },
+                                        React.createElement('div', { className: "flex justify-between text-white font-semibold" },
+                                            React.createElement('span', null, "Job Subtotal:"),
+                                            React.createElement('span', null, `$${calculateJobTotal(job).toFixed(2)}`)
+                                        )
+                                    )
+                                    ) // Close conditional div
+                                )
+                            ),
+
+                            // Add Job Button (hide on print)
+                            React.createElement('button', {
+                                onClick: addJob,
+                                className: "w-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-orange-500/50 transition-all no-print"
+                            },
+                                React.createElement(Plus, { size: 20 }),
+                                "Add Another Job"
+                            ),
+
+                            // Payment Section (hide on print)
+                            React.createElement('div', { className: "bg-white/5 rounded-2xl p-6 border-2 border-blue-500/30 space-y-4 no-print" },
+                                React.createElement('h3', { className: "text-orange-300 font-bold text-lg mb-4" }, "Payment"),
+                                
+                                // Partial Payment
+                                React.createElement('div', { className: "flex flex-col sm:flex-row sm:items-center gap-4" },
+                                    React.createElement('label', { className: "text-white font-semibold" }, "Partial Payment:"),
+                                    React.createElement('div', { className: "flex items-center gap-2" },
+                                        React.createElement('span', { className: "text-white text-lg" }, "$"),
+                                        React.createElement('input', {
+                                            type: "number",
+                                            step: "0.01",
+                                            value: partialPayment || '',
+                                            onChange: (e) => setPartialPayment(e.target.value === '' ? 0 : parseFloat(e.target.value)),
+                                            placeholder: "0.00",
+                                            className: "flex-1 sm:w-32 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white focus:border-orange-400 focus:outline-none transition-all"
+                                        })
+                                    ),
+                                    partialPayment > 0 && React.createElement('span', { className: "text-orange-300 text-sm" }, 
+                                        `Balance: $${(grandTotal - partialPayment).toFixed(2)}`
+                                    )
+                                ),
+                                
+                                // Full Payment Received
+                                React.createElement('div', { className: "flex flex-col sm:flex-row sm:items-center gap-4 pt-2 border-t border-white/20" },
+                                    React.createElement('label', { className: "flex items-center gap-3 cursor-pointer" },
+                                        React.createElement('input', {
+                                            type: "checkbox",
+                                            checked: paymentReceived,
+                                            onChange: (e) => handlePaymentReceived(e.target.checked),
+                                            className: "w-6 h-6 cursor-pointer"
+                                        }),
+                                        React.createElement('span', { className: "text-white font-semibold" }, "Payment Received in Full")
+                                    ),
+                                    paymentReceived && React.createElement('select', {
+                                        value: paymentMethod,
+                                        onChange: (e) => setPaymentMethod(e.target.value),
+                                        className: "w-full sm:w-auto bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-orange-400 focus:outline-none transition-all"
+                                    },
+                                        React.createElement('option', { value: 'Cash', style: { color: 'black', background: 'white' } }, "Cash"),
+                                        React.createElement('option', { value: 'Check', style: { color: 'black', background: 'white' } }, "Check"),
+                                        React.createElement('option', { value: 'Credit Card', style: { color: 'black', background: 'white' } }, "Credit Card"),
+                                        React.createElement('option', { value: 'Debit Card', style: { color: 'black', background: 'white' } }, "Debit Card"),
+                                        React.createElement('option', { value: 'Zelle', style: { color: 'black', background: 'white' } }, "Zelle"),
+                                        React.createElement('option', { value: 'Venmo', style: { color: 'black', background: 'white' } }, "Venmo"),
+                                        React.createElement('option', { value: 'PayPal', style: { color: 'black', background: 'white' } }, "PayPal")
+                                    )
+                                )
+                            ),
+
+                            // Grand Total
+                            React.createElement('div', { className: "bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 rounded-2xl p-6 flex items-center justify-between" },
+                                React.createElement('div', null,
+                                    React.createElement('div', { className: "text-white/80 text-sm" }, 
+                                        docType === 'estimate' ? 'ESTIMATED TOTAL' : docType === 'work_order' ? 'WORK ORDER TOTAL' : 'INVOICE TOTAL'
+                                    ),
+                                    React.createElement('div', { className: "text-white font-bold text-4xl" }, `$${grandTotal.toFixed(2)}`)
+                                ),
+                                React.createElement(FileText, { size: 48 })
+                            ),
+
+                            // Save Button (hide on print)
+                            React.createElement('button', {
+                                onClick: saveInvoice,
+                                className: "w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2 text-lg no-print mb-4"
+                            },
+                                React.createElement(FileText, { size: 24 }),
+                                `${currentInvoiceId ? 'Update' : 'Save'} ${docType === 'estimate' ? 'Estimate' : docType === 'work_order' ? 'Work Order' : 'Invoice'}`
+                            ),
+
+                            // Print Button (hide on print)
+                            React.createElement('button', {
+                                onClick: handlePrint,
+                                className: "w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-700 transition-all flex items-center justify-center gap-2 text-lg no-print"
+                            },
+                                React.createElement(Printer, { size: 24 }),
+                                "Print for Customer"
+                            ),
+
+                            // Print-only footer
+                            React.createElement('div', { className: "print-footer hidden print:block" },
+                                React.createElement('p', { style: { marginBottom: '30px', fontSize: '12px' } }, 
+                                    "Payment due upon completion. We accept cash, check, and credit cards."
+                                ),
+                                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginTop: '40px' } },
+                                    React.createElement('div', { style: { width: '45%' } },
+                                        React.createElement('div', { style: { borderBottom: '1px solid black', marginBottom: '5px' } }, "\u00A0"),
+                                        React.createElement('p', { style: { fontSize: '12px' } }, "Customer Signature")
+                                    ),
+                                    React.createElement('div', { style: { width: '45%' } },
+                                        React.createElement('div', { style: { borderBottom: '1px solid black', marginBottom: '5px' } }, "\u00A0"),
+                                        React.createElement('p', { style: { fontSize: '12px' } }, "Date")
+                                    )
+                                ),
+                                React.createElement('p', { style: { marginTop: '30px', fontSize: '10px', textAlign: 'center' } }, 
+                                    "Thank you for your business!"
+                                )
+                            )
+                        )
+                    ),
+
+                    // History Tab Content
+                    activeTab === 'history' && React.createElement('div', { className: "gradient-bg bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-8 border border-white/20" },
+                        React.createElement('h2', { className: "text-3xl font-bold text-white mb-6" }, "Invoice & Estimate History"),
+                        
+                        // Color Legend
+                        React.createElement('div', { className: "flex flex-wrap gap-4 md:gap-6 mb-6 pb-6 border-b border-white/20" },
+                            React.createElement('div', { className: "flex items-center gap-2" },
+                                React.createElement('div', { className: "w-6 h-6 bg-yellow-500 rounded" }),
+                                React.createElement('span', { className: "text-white text-sm" }, "Estimate")
+                            ),
+                            React.createElement('div', { className: "flex items-center gap-2" },
+                                React.createElement('div', { className: "w-6 h-6 bg-orange-500 rounded" }),
+                                React.createElement('span', { className: "text-white text-sm" }, "Work Order")
+                            ),
+                            React.createElement('div', { className: "flex items-center gap-2" },
+                                React.createElement('div', { className: "w-6 h-6 bg-green-500 rounded" }),
+                                React.createElement('span', { className: "text-white text-sm" }, "Invoice")
+                            ),
+                            React.createElement('div', { className: "flex items-center gap-2" },
+                                React.createElement('div', { className: "w-6 h-6 bg-gray-500 rounded" }),
+                                React.createElement('span', { className: "text-white text-sm" }, "Archived")
+                            )
+                        ),
+                        
+                        savedInvoices.length === 0 
+                            ? React.createElement('p', { className: "text-white/60 text-center py-12" }, "No saved invoices yet")
+                            : React.createElement('div', { className: "overflow-x-auto -mx-4 sm:mx-0" },
+                                React.createElement('div', { className: "inline-block min-w-full align-middle px-4 sm:px-0" },
+                                React.createElement('table', { className: "w-full min-w-[800px]" },
+                                    React.createElement('thead', null,
+                                        React.createElement('tr', { className: "border-b border-white/20" },
+                                            React.createElement('th', { className: "text-left text-orange-300 font-semibold py-3 px-4" }, "Number"),
+                                            React.createElement('th', { className: "text-left text-orange-300 font-semibold py-3 px-4" }, "Date"),
+                                            React.createElement('th', { className: "text-left text-orange-300 font-semibold py-3 px-4" }, "Type"),
+                                            React.createElement('th', { className: "text-left text-orange-300 font-semibold py-3 px-4" }, "Customer"),
+                                            React.createElement('th', { className: "text-left text-orange-300 font-semibold py-3 px-4" }, "Vehicle"),
+                                            React.createElement('th', { className: "text-right text-orange-300 font-semibold py-3 px-4" }, "Total"),
+                                            React.createElement('th', { className: "text-center text-orange-300 font-semibold py-3 px-4" }, "Paid"),
+                                            React.createElement('th', { className: "text-center text-orange-300 font-semibold py-3 px-4" }, "Actions")
+                                        )
+                                    ),
+                                    React.createElement('tbody', null,
+                                        savedInvoices.map(invoice => {
+                                            const date = new Date(invoice.date);
+                                            const isArchived = invoice.archived || false;
+                                            const rowColor = isArchived ? '' : 
+                                                invoice.type === 'invoice' ? 'bg-green-500/10' : 
+                                                invoice.type === 'work_order' ? 'bg-orange-500/10' : 
+                                                'bg-yellow-500/10';
+                                            return React.createElement('tr', { 
+                                                key: invoice.id,
+                                                onClick: () => loadInvoice(invoice),
+                                                className: `border-b border-white/10 hover:bg-white/5 transition-all cursor-pointer ${rowColor} ${isArchived ? 'opacity-50' : ''}`
+                                            },
+                                                React.createElement('td', { className: `py-4 px-4 font-bold ${isArchived ? 'text-gray-500' : 'text-white'}` }, `#${invoice.number}`),
+                                                React.createElement('td', { className: `py-4 px-4 ${isArchived ? 'text-gray-500' : 'text-white'}` }, 
+                                                    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                                ),
+                                                React.createElement('td', { className: "py-4 px-4" },
+                                                    React.createElement('span', { 
+                                                        className: `px-3 py-1 rounded-full text-xs font-bold ${
+                                                            isArchived 
+                                                                ? 'bg-gray-500/30 text-gray-400'
+                                                                : invoice.type === 'invoice' 
+                                                                    ? 'bg-green-500/30 text-green-300'
+                                                                    : invoice.type === 'work_order'
+                                                                        ? 'bg-orange-500/30 text-orange-300'
+                                                                        : 'bg-yellow-500/30 text-yellow-300'
+                                                        }`
+                                                    }, invoice.type === 'work_order' ? 'WORK ORDER' : invoice.type.toUpperCase())
+                                                ),
+                                                React.createElement('td', { className: `py-4 px-4 ${isArchived ? 'text-gray-500' : 'text-white'}` }, invoice.customerName || 'N/A'),
+                                                React.createElement('td', { className: `py-4 px-4 ${isArchived ? 'text-gray-500' : 'text-white/80'}` }, invoice.vehicleInfo || 'N/A'),
+                                                React.createElement('td', { className: `py-4 px-4 text-right font-semibold ${isArchived ? 'text-gray-500' : 'text-white'}` }, 
+                                                    `$${invoice.total.toFixed(2)}`
+                                                ),
+                                                React.createElement('td', { className: "py-4 px-4" },
+                                                    React.createElement('div', { className: "flex justify-center" },
+                                                        invoice.paymentReceived 
+                                                            ? React.createElement('div', { 
+                                                                className: "bg-green-500 text-white font-bold w-8 h-8 rounded flex items-center justify-center",
+                                                                title: `Paid via ${invoice.paymentMethod || 'Cash'}`
+                                                            }, "$")
+                                                            : React.createElement('div', { className: "w-8 h-8" })
+                                                    )
+                                                ),
+                                                React.createElement('td', { 
+                                                    className: "py-4 px-4",
+                                                    onClick: (e) => e.stopPropagation()
+                                                },
+                                                    React.createElement('div', { className: "flex gap-2 justify-center" },
+                                                        React.createElement('button', {
+                                                            onClick: () => archiveInvoice(invoice.id),
+                                                            className: `${isArchived ? 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30' : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30'} px-4 py-2 rounded-lg transition-all text-sm font-semibold`
+                                                        }, isArchived ? "Unarchive" : "Archive"),
+                                                        React.createElement('button', {
+                                                            onClick: () => deleteInvoice(invoice.id),
+                                                            className: "bg-red-500/20 text-red-300 px-4 py-2 rounded-lg hover:bg-red-500/30 transition-all text-sm font-semibold"
+                                                        }, "Delete")
+                                                    )
+                                                )
+                                            );
+                                        })
+                                    )
+                                )
+                                )
+                            ),
+                        
+                        // Totals Section
+                        savedInvoices.length > 0 && React.createElement('div', { className: "mt-8 pt-6 border-t-2 border-white/20" },
+                            React.createElement('div', { className: "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6" },
+                                React.createElement('h3', { className: "text-2xl font-bold text-white" }, "Running Totals"),
+                                React.createElement('select', {
+                                    value: dateFilter,
+                                    onChange: (e) => setDateFilter(e.target.value),
+                                    className: "bg-white/10 border-2 border-orange-500/30 rounded-lg px-4 py-2 text-white focus:border-orange-400 focus:outline-none transition-all"
+                                },
+                                    React.createElement('option', { value: 'all', style: { color: 'black', background: 'white' } }, "All Time"),
+                                    React.createElement('option', { value: 'year', style: { color: 'black', background: 'white' } }, "This Year"),
+                                    React.createElement('option', { value: 'month', style: { color: 'black', background: 'white' } }, "This Month"),
+                                    React.createElement('option', { value: 'week', style: { color: 'black', background: 'white' } }, "This Week")
+                                )
+                            ),
+                            
+                            React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-3 gap-4" },
+                                // Estimates Total
+                                React.createElement('div', { className: "bg-yellow-500/10 border-2 border-yellow-500/30 rounded-xl p-6" },
+                                    React.createElement('div', { className: "flex items-center gap-3 mb-2" },
+                                        React.createElement('div', { className: "w-4 h-4 bg-yellow-500 rounded" }),
+                                        React.createElement('h4', { className: "text-yellow-300 font-semibold text-sm" }, "Estimates")
+                                    ),
+                                    React.createElement('p', { className: "text-white text-3xl font-bold" }, 
+                                        `$${calculateTotals().estimateTotal.toFixed(2)}`
+                                    )
+                                ),
+                                
+                                // Work Orders Total
+                                React.createElement('div', { className: "bg-orange-500/10 border-2 border-orange-500/30 rounded-xl p-6" },
+                                    React.createElement('div', { className: "flex items-center gap-3 mb-2" },
+                                        React.createElement('div', { className: "w-4 h-4 bg-orange-500 rounded" }),
+                                        React.createElement('h4', { className: "text-orange-300 font-semibold text-sm" }, "Work Orders")
+                                    ),
+                                    React.createElement('p', { className: "text-white text-3xl font-bold" }, 
+                                        `$${calculateTotals().workOrderTotal.toFixed(2)}`
+                                    )
+                                ),
+                                
+                                // Paid Invoices Total
+                                React.createElement('div', { className: "bg-green-500/10 border-2 border-green-500/30 rounded-xl p-6" },
+                                    React.createElement('div', { className: "flex items-center gap-3 mb-2" },
+                                        React.createElement('div', { className: "w-4 h-4 bg-green-500 rounded" }),
+                                        React.createElement('h4', { className: "text-green-300 font-semibold text-sm" }, "Paid Invoices")
+                                    ),
+                                    React.createElement('p', { className: "text-white text-3xl font-bold" }, 
+                                        `$${calculateTotals().paidInvoiceTotal.toFixed(2)}`
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        ReactDOM.render(React.createElement(WareRepairInvoice), document.getElementById('root'));
+    </script>
+</body>
+</html>
